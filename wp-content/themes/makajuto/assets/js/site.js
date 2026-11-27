@@ -119,14 +119,29 @@ $$("[data-track]").forEach(function(tr){
 /* ---- galeria karty produktu ---- */
 var stage=$("#stage");
 if(stage){
-  var sts=$$(".st",stage),ths=$$(".th");
+  var sts=$$(".st",stage),ths=$$(".th"),thw=$("#thumbs");
+  var widoczne=function(){return sts.filter(function(s){return !s.hidden})};
   var pick=function(i){sts.forEach(function(s,j){s.classList.toggle("on",j===i)});ths.forEach(function(t,j){t.classList.toggle("on",j===i)})};
   ths.forEach(function(t){t.addEventListener("click",function(){pick(+t.getAttribute("data-i"))})});
   var sx2=0;stage.addEventListener("touchstart",function(e){sx2=e.touches[0].clientX},{passive:true});
-  stage.addEventListener("touchend",function(e){var dx=e.changedTouches[0].clientX-sx2;if(Math.abs(dx)<40||sts.length<2)return;var cur=sts.findIndex(function(s){return s.classList.contains("on")});pick((cur+(dx<0?1:-1)+sts.length)%sts.length);stage.dataset.sw="1";setTimeout(function(){delete stage.dataset.sw},350)},{passive:true});
-  // wariant ze zdjęciem: pokaż jego zdjęcie
-  var vf=$(".variations_form");
-  if(vf&&window.jQuery){jQuery(vf).on("found_variation",function(e,v){if(v&&v.image_id){var i=sts.findIndex(function(s){return +s.getAttribute("data-aid")===v.image_id});if(i>=0)pick(i)}var pr=$("#ppP");if(pr&&v.price_html)pr.innerHTML=v.price_html;var av=$("#ppAv");if(av)av.innerHTML=v.is_in_stock?(v.max_qty?'<span class="av">dostępne: '+v.max_qty+' szt.</span>':'<span class="av av0">na zamówienie</span>'):'<span class="av av0">chwilowo niedostępny</span>'})}
+  stage.addEventListener("touchend",function(e){var dx=e.changedTouches[0].clientX-sx2,w=widoczne();if(Math.abs(dx)<40||w.length<2)return;var cur=w.findIndex(function(s){return s.classList.contains("on")});pick(sts.indexOf(w[(cur+(dx<0?1:-1)+w.length)%w.length]));stage.dataset.sw="1";setTimeout(function(){delete stage.dataset.sw},350)},{passive:true});
+  // warianty: pokazujemy tylko zdjęcia wybranego wariantu (albo wszystkich pasujących, gdy wybrano np. sam kolor)
+  var war=null,dom=null;try{war=JSON.parse(stage.getAttribute("data-war")||"null");dom=JSON.parse(stage.getAttribute("data-dom")||"null")}catch(e){}
+  var pokaz=function(lista){if(!war||!lista||!lista.length)return;var jest={};lista.forEach(function(a){jest[a]=1});
+    sts.forEach(function(s){s.hidden=!jest[s.getAttribute("data-aid")]});ths.forEach(function(t){t.hidden=!jest[t.getAttribute("data-aid")]});
+    if(thw)thw.hidden=lista.length<2;var i=sts.findIndex(function(s){return +s.getAttribute("data-aid")===+lista[0]});if(i>=0)pick(i);if(thw)thw.scrollTop=thw.scrollLeft=0};
+  var vf=$(".variations_form"),av0=$("#ppAv")?$("#ppAv").innerHTML:"",pr0=$("#ppP")?$("#ppP").innerHTML:"",vc=$("#vcnt");
+  var dopasuj=function(){if(!war||!vf||!window.jQuery)return;var vars=jQuery(vf).data("product_variations")||[],wyb={},ile=0;
+    $$(".variations select",vf).forEach(function(s){if(s.value){wyb[s.getAttribute("data-attribute_name")||s.name]=s.value;ile++}});
+    if(!ile){pokaz(dom);return}
+    var l=[];vars.forEach(function(v){for(var k in wyb){var a=v.attributes[k];if(a&&a!==wyb[k])return}(war[v.variation_id]||[]).forEach(function(a){if(l.indexOf(a)<0)l.push(a)})});
+    pokaz(l.length?l:dom)};
+  if(vf&&window.jQuery){
+    jQuery(vf).on("change",".variations select",function(){setTimeout(dopasuj,0)});
+    jQuery(vf).on("found_variation",function(e,v){if(war&&war[v.variation_id])pokaz(war[v.variation_id]);else if(v&&v.image_id){var i=sts.findIndex(function(s){return +s.getAttribute("data-aid")===v.image_id});if(i>=0){sts[i].hidden=false;pick(i)}}
+      if(vc)vc.hidden=true;var pr=$("#ppP");if(pr&&v.price_html)pr.innerHTML=v.price_html;var av=$("#ppAv");if(av)av.innerHTML=v.is_in_stock?(v.max_qty?'<span class="av">dostępne: '+v.max_qty+' szt.</span>':'<span class="av av0">na zamówienie</span>'):'<span class="av av0">chwilowo niedostępny</span>'});
+    jQuery(vf).on("reset_data",function(){if(vc)vc.hidden=false;var av=$("#ppAv");if(av)av.innerHTML=av0;var pr=$("#ppP");if(pr)pr.innerHTML=pr0;setTimeout(dopasuj,0)});
+  }
 }
 /* warianty jako przyciski zamiast list rozwijanych */
 $$(".variations select").forEach(function(sel){
@@ -144,7 +159,7 @@ var lb=$("#lb");
 if(lb){
 var li=$("img",lb),lc=$(".cap",lb),ln=$(".cnt",lb),grp=[],gi=0,last=null;
 var show=function(i){gi=(i+grp.length)%grp.length;var el=grp[gi],fw=+el.getAttribute("data-fw")||800,fh=+el.getAttribute("data-fh")||800;li.src=el.getAttribute("data-full");li.width=fw;li.height=fh;li.style.maxWidth="min(calc(100vw - 24px),"+fw+"px)";li.style.maxHeight="min(calc(100svh - 130px),"+fh+"px)";li.alt=el.getAttribute("data-cap")||"";lc.textContent=el.getAttribute("data-cap")||"";ln.textContent=grp.length>1?(gi+1)+" / "+grp.length:"";var one=grp.length<2;$(".pv",lb).style.display=one?"none":"";$(".nx",lb).style.display=one?"none":""};
-var open=function(el){var g=el.getAttribute("data-lb");grp=$$('[data-lb="'+g+'"]');last=el;show(grp.indexOf(el));lb.classList.add("on");b.style.overflow="hidden";$(".x",lb).focus()};
+var open=function(el){var g=el.getAttribute("data-lb");grp=$$('[data-lb="'+g+'"]').filter(function(x){return !x.hidden});last=el;show(grp.indexOf(el));lb.classList.add("on");b.style.overflow="hidden";$(".x",lb).focus()};
 var close=function(){lb.classList.remove("on");b.style.overflow="";if(last)last.focus({preventScroll:true})};
 d.addEventListener("click",function(e){var el=e.target.closest("[data-lb]");if(el&&!lb.contains(el)){if(stage&&stage.dataset.sw)return;e.preventDefault();open(el)}});
 $(".x",lb).addEventListener("click",close);$(".pv",lb).addEventListener("click",function(){show(gi-1)});$(".nx",lb).addEventListener("click",function(){show(gi+1)});
